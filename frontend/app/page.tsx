@@ -435,6 +435,32 @@ export default function Home() {
     agentOptions.find((option) => option.id === preferredAgent) ?? agentOptions[0];
   const SelectedAgentIcon = selectedAgent.icon;
   const providerLabel = (health?.provider ?? "正在连接").replaceAll("本地", "");
+  const runtimeNote =
+    !health
+      ? {
+          tone: "checking",
+          title: "正在检测模型服务",
+          description: "正在读取后端配置与运行状态，请稍候。",
+        }
+      : health.status !== "ok"
+        ? {
+            tone: "offline",
+            title: "后端服务未连接",
+            description:
+              "请确认 FastAPI 已在 8000 端口启动，然后刷新页面重新检测。",
+          }
+        : health.demo_mode
+          ? {
+              tone: "demo",
+              title: "当前为演示模式",
+              description:
+                "Agent 编排、工具与 RAG 可正常使用。修改 .env 后需要重启后端，才能启用真实模型。",
+            }
+          : {
+              tone: "live",
+              title: "真实模型已启用",
+              description: `当前由 ${providerLabel} 提供回答，Agent 协作与知识检索均已连接。`,
+            };
 
   return (
     <main className="app-shell">
@@ -850,17 +876,11 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            <div className="config-note">
+            <div className={`config-note ${runtimeNote.tone}`}>
               <Cpu size={17} />
               <div>
-                <strong>
-                  {health?.demo_mode ? "当前为离线演示模式" : "当前为真实模型模式"}
-                </strong>
-                <p>
-                  {health?.demo_mode
-                    ? "完整 Agent 链路可用，无需 API Key。在 .env 中配置 LLM_API_KEY 后会切换为真实大模型。"
-                    : "后端已连接 OpenAI 兼容模型接口，Agent 输出由真实模型生成。"}
-                </p>
+                <strong>{runtimeNote.title}</strong>
+                <p>{runtimeNote.description}</p>
               </div>
             </div>
           </div>

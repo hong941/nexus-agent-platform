@@ -1941,6 +1941,40 @@ summary:focus-visible {
   background: #f7f5ff;
 }
 
+.config-note.live {
+  color: #2f8765;
+  border-color: #cfeadf;
+  background: #f2fbf7;
+}
+
+.config-note.live strong {
+  color: #2f765a;
+}
+
+.config-note.live p {
+  color: #668d7c;
+}
+
+.config-note.offline {
+  color: #b25c63;
+  border-color: #f0d5d8;
+  background: #fff6f6;
+}
+
+.config-note.offline strong {
+  color: #9b4f56;
+}
+
+.config-note.offline p {
+  color: #a97b80;
+}
+
+.config-note.checking {
+  color: #8275b6;
+  border-color: #e2dff2;
+  background: #faf9ff;
+}
+
 .config-note svg {
   flex: 0 0 auto;
   margin-top: 1px;
