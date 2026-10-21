@@ -4,7 +4,9 @@ import sqlite3
 
 import pytest
 
+from app.agents import KnowledgeAgent
 from app.knowledge import DATABASE_PATH, knowledge_base
+from app.llm import llm_service
 from app.math_parser import normalize_math_expression
 from app.orchestrator import AgentOrchestrator, choose_routes
 from app.tools import build_tool_registry, calculate_expression
@@ -76,4 +78,49 @@ async def test_chinese_power_question_routes_to_math_agent() -> None:
     assert state["routes"] == ["math"]
     assert state["results"][0]["agent"] == "math"
     assert "48828125" in state["answer"]
+
+
+@pytest.mark.asyncio
+async def test_knowledge_agent_answers_without_rag_sources(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, str] = {}
+
+    async def fake_complete(
+        system: str,
+        user: str,
+        **_: object,
+    ) -> str:
+        captured["system"] = system
+        captured["user"] = user
+        return "> 知识库未命中，以下为通用知识回答。\n\n量子计算利用量子比特完成并行计算。"
+
+    monkeypatch.setattr(llm_service, "enabled", True)
+    monkeypatch.setattr(llm_service, "complete", fake_complete)
+    monkeypatch.setattr(knowledge_base, "search", lambda *_args, **_kwargs: [])
+
+    result = await KnowledgeAgent().run("量子计算的基本原理是什么？", [])
+
+    assert result.sources == []
+    assert result.answer.startswith("> 知识库未命中")
+    assert "通用知识" in captured["system"]
+    assert "不要声称资料中没有答案" in captured["system"]
+    assert "知识库未命中" in result.tools[0]["summary"]
+
+
+@pytest.mark.asyncio
+async def test_knowledge_agent_uses_history_for_follow_up(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, str] = {}
+
+    async def fake_complete(system: str, user: str, **_: object) -> str:
+        captured["system"] = system
+        captured["user"] = user
+        return "RAG 的优势包括引用可追溯和降低幻觉。"
+
+    monkeypatch.setattr(llm_service, "enabled", True)
+    monkeypatch.setattr(llm_service, "complete", fake_complete)
+    monkeypatch.setattr(knowledge_base, "search", lambda *_args, **_kwargs: [])
+
+    history = [{"role": "user", "content": "请介绍一下 RAG"}]
+    await KnowledgeAgent().run("它有什么优点？", history)
+
+    assert "请介绍一下 RAG 它有什么优点？" in captured["user"]
 

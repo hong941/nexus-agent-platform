@@ -459,7 +459,7 @@ export default function Home() {
           : {
               tone: "live",
               title: "真实模型已启用",
-              description: `当前由 ${providerLabel} 提供回答，Agent 协作与知识检索均已连接。`,
+              description: `当前由 ${providerLabel} 提供回答，知识库检索与通用知识问答均已连接。`,
             };
 
   return (

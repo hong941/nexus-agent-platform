@@ -100,33 +100,54 @@ class KnowledgeAgent:
     label = "知识 Agent"
 
     async def run(self, question: str, history: list[dict[str, str]]) -> AgentResult:
-        sources = knowledge_base.search(question, top_k=4)
+        retrieval_query = self._build_retrieval_query(question, history)
+        sources = knowledge_base.search(retrieval_query, top_k=4)
         if llm_service.enabled:
             context = "\n\n".join(
                 f"[{index + 1}] {source['title']}\n{source['excerpt']}"
                 for index, source in enumerate(sources)
             )
             system = (
-                "你是 Nexus Agent 的知识库专员。只依据给定资料回答；资料不足时直接说明。"
-                "回答使用中文 Markdown，并在关键结论后标注 [1]、[2] 形式的来源编号。"
+                "你是 Nexus Agent 的知识问答专家，拥有 RAG 知识库和通用专业知识两类信息来源。\n"
+                "回答规则：\n"
+                "1. 如果知识片段确实与问题相关，优先使用片段中的事实，并在对应结论后标注 [1]、[2]。\n"
+                "2. 如果知识库未命中或信息不足，直接使用你的通用知识完整回答，不要声称资料中没有答案，也不要编造来源编号。\n"
+                "3. 对于通用知识回答，以“> 知识库未命中，以下为通用知识回答。”开头。\n"
+                "4. 如果片段只覆盖部分内容，可以结合通用知识补充，但要清楚区分产品事实与一般背景。\n"
+                "5. 使用中文 Markdown，先给直接答案，再给必要的解释、步骤或示例；对不确定内容明确说明。"
             )
-            prompt = f"历史对话（供理解上下文）：\n{history[-4:]}\n\n知识片段：\n{context or '无命中资料'}\n\n问题：{question}"
+            history_text = "\n".join(
+                f"{'用户' if message.get('role') == 'user' else '助手'}："
+                f"{str(message.get('content', ''))[:700]}"
+                for message in history[-6:]
+            )
+            prompt = (
+                f"历史对话（用于理解追问和上下文）：\n{history_text or '无'}\n\n"
+                f"知识库检索查询：{retrieval_query}\n\n"
+                f"知识片段：\n{context or '无命中资料'}\n\n"
+                f"当前问题：{question}"
+            )
             try:
                 answer = await llm_service.complete(system, prompt)
             except Exception:
                 answer = self._fallback_answer(question, sources)
         else:
             answer = self._fallback_answer(question, sources)
+        search_summary = (
+            f"知识库命中 {len(sources)} 个片段"
+            if sources
+            else "知识库未命中，转入通用知识回答"
+        )
         return AgentResult(
             agent=self.id,
             label=self.label,
             answer=answer,
-            confidence=min(0.94, 0.55 + len(sources) * 0.09),
+            confidence=min(0.95, 0.72 + len(sources) * 0.06),
             tools=[
                 {
                     "name": "knowledge_search",
                     "display_name": "知识检索",
-                    "summary": f"召回 {len(sources)} 个相关片段",
+                    "summary": search_summary,
                     "duration_ms": 24,
                 }
             ],
@@ -134,11 +155,26 @@ class KnowledgeAgent:
         )
 
     @staticmethod
+    def _build_retrieval_query(
+        question: str, history: list[dict[str, str]]
+    ) -> str:
+        coreference_words = ("它", "这个", "该方案", "该方法", "上述", "前面", "这种", "其")
+        previous_user_messages = [
+            str(message.get("content", "")).strip()
+            for message in history
+            if message.get("role") == "user" and str(message.get("content", "")).strip()
+        ]
+        if previous_user_messages and any(word in question for word in coreference_words):
+            return f"{previous_user_messages[-1][-800:]} {question}"
+        return question
+
+    @staticmethod
     def _fallback_answer(question: str, sources: list[dict[str, Any]]) -> str:
         if not sources:
             return (
-                "当前知识库没有找到足够相关的内容。你可以上传产品文档、规范或 FAQ，"
-                "系统会切块并加入检索范围。"
+                "> 知识库未命中，且当前未连接通用模型，暂时无法回答这个问题。\n\n"
+                "配置 `LLM_API_KEY` 并重启后端后，知识 Agent 会自动启用通用知识回答；"
+                "你也可以上传相关文档，让它结合知识库回答。"
             )
         body = "\n\n".join(
             f"- **{source['title']}**：{source['excerpt']} [来源 {index + 1}]"

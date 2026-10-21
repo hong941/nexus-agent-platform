@@ -63,8 +63,8 @@ AGENTS = [
     AgentInfo(
         id="knowledge",
         name="知识 Agent",
-        role="知识检索",
-        description="基于 RAG 知识库回答并返回可追溯来源",
+        role="知识问答",
+        description="融合 RAG 知识库与通用知识回答，并提供可追溯来源",
         color="#39c895",
         tools=["knowledge_search"],
     ),
