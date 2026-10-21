@@ -8,6 +8,7 @@ from langgraph.graph import END, START, StateGraph
 
 from .agents import CodeAgent, KnowledgeAgent, MathAgent
 from .llm import llm_service, messages_to_prompt
+from .math_parser import looks_like_math
 from .tools import ToolRegistry
 
 
@@ -38,9 +39,25 @@ def choose_routes(question: str, preferred: str = "auto") -> tuple[list[str], di
     reasons: dict[str, str] = {}
 
     math_score = 0
-    if re.search(r"\d+\s*[+\-*/^×÷%]\s*\d+", question):
+    if looks_like_math(question):
         math_score += 3
-    if any(word in question for word in ("计算", "求值", "等于多少", "方程", "概率", "对数")):
+    if any(
+        word in question
+        for word in (
+            "计算",
+            "求值",
+            "等于多少",
+            "方程",
+            "概率",
+            "对数",
+            "次方",
+            "次幂",
+            "平方",
+            "立方",
+            "根号",
+            "分之",
+        )
+    ):
         math_score += 2
     if math_score >= 2:
         routes.append("math")

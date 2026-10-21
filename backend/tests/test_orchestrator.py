@@ -5,6 +5,7 @@ import sqlite3
 import pytest
 
 from app.knowledge import DATABASE_PATH, knowledge_base
+from app.math_parser import normalize_math_expression
 from app.orchestrator import AgentOrchestrator, choose_routes
 from app.tools import build_tool_registry, calculate_expression
 
@@ -29,6 +30,22 @@ def test_combined_task_routes_to_multiple_agents() -> None:
     assert set(reasons) == {"math", "code"}
 
 
+@pytest.mark.parametrize(
+    ("question", "expected"),
+    [
+        ("五的11次方", 48_828_125),
+        ("二的十次方", 1024),
+        ("三加五乘二", 13),
+        ("根号九", 3),
+        ("四分之八", 2),
+    ],
+)
+def test_natural_language_math(question: str, expected: int) -> None:
+    expression = normalize_math_expression(question)
+    _, value = calculate_expression(expression)
+    assert value == expected
+
+
 def test_knowledge_search_returns_sources() -> None:
     sources = knowledge_base.search("Nexus Agent 如何支持 RAG 和来源引用", top_k=3)
     assert sources
@@ -50,4 +67,13 @@ async def test_graph_runs_end_to_end() -> None:
     assert "math" in state["routes"]
     assert state["results"][0]["agent"] == "math"
     assert "443" in state["answer"]
+
+
+@pytest.mark.asyncio
+async def test_chinese_power_question_routes_to_math_agent() -> None:
+    orchestrator = AgentOrchestrator(build_tool_registry())
+    state = await orchestrator.run("五的11次方", [], preferred_agent="auto")
+    assert state["routes"] == ["math"]
+    assert state["results"][0]["agent"] == "math"
+    assert "48828125" in state["answer"]
 

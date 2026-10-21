@@ -8,6 +8,7 @@ from typing import Any
 from .config import settings
 from .knowledge import knowledge_base
 from .llm import llm_service
+from .math_parser import is_valid_expression, normalize_math_expression
 from .tools import ToolRegistry
 
 
@@ -32,6 +33,10 @@ class AgentResult:
 
 
 def _extract_expression(question: str) -> str:
+    normalized = normalize_math_expression(question)
+    if is_valid_expression(normalized):
+        return normalized
+
     candidates = re.findall(r"(?:计算|求值|算一下|等于多少|是多少)?\s*([0-9\s+\-*/().,%^×÷a-zA-Z_]+)", question)
     for candidate in candidates:
         expression = candidate.strip(" ：:，,。")
