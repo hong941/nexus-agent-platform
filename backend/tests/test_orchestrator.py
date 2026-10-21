@@ -1,0 +1,53 @@
+from __future__ import annotations
+
+import sqlite3
+
+import pytest
+
+from app.knowledge import DATABASE_PATH, knowledge_base
+from app.orchestrator import AgentOrchestrator, choose_routes
+from app.tools import build_tool_registry, calculate_expression
+
+
+def test_math_routes_and_tool() -> None:
+    routes, _ = choose_routes("请计算 (128 * 7 + 36) / 4")
+    assert "math" in routes
+    display, value = calculate_expression("(128 * 7 + 36) / 4")
+    assert value == 233
+    assert display == "233"
+
+
+def test_code_routes() -> None:
+    routes, reasons = choose_routes("用 Python 写一个快速排序函数")
+    assert routes == ["code"]
+    assert reasons["code"]
+
+
+def test_combined_task_routes_to_multiple_agents() -> None:
+    routes, reasons = choose_routes("用 Python 写一个函数，计算 (128 * 7 + 36) / 4")
+    assert routes == ["math", "code"]
+    assert set(reasons) == {"math", "code"}
+
+
+def test_knowledge_search_returns_sources() -> None:
+    sources = knowledge_base.search("Nexus Agent 如何支持 RAG 和来源引用", top_k=3)
+    assert sources
+    assert sources[0]["title"]
+    assert sources[0]["excerpt"]
+    assert knowledge_base.stats()["backend"] == "sqlite"
+    assert DATABASE_PATH.is_file()
+    with sqlite3.connect(DATABASE_PATH) as connection:
+        document_count = connection.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+        chunk_count = connection.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+    assert document_count >= 3
+    assert chunk_count >= 3
+
+
+@pytest.mark.asyncio
+async def test_graph_runs_end_to_end() -> None:
+    orchestrator = AgentOrchestrator(build_tool_registry())
+    state = await orchestrator.run("计算 19 * 23 + 6", [], preferred_agent="auto")
+    assert "math" in state["routes"]
+    assert state["results"][0]["agent"] == "math"
+    assert "443" in state["answer"]
+

@@ -1,0 +1,4 @@
+# Optional production RAG stack. The app automatically uses it when available.
+chromadb==1.0.20
+sentence-transformers==5.1.0
+
